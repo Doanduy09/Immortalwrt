@@ -886,6 +886,23 @@ define Device/cudy_wr3000-v1
 endef
 TARGET_DEVICES += cudy_wr3000-v1
 
+define Device/cudy_wr3000e-v1
+  DEVICE_VENDOR := Cudy
+  DEVICE_MODEL := WR3000E
+  DEVICE_VARIANT := v1
+  DEVICE_DTS := mt7981b-cudy-wr3000e-v1
+  DEVICE_DTS_DIR := ../dts
+  SUPPORTED_DEVICES += R53
+  UBINIZE_OPTS := -E 5
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  IMAGE_SIZE := 65536k
+  KERNEL_IN_UBI := 1
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware
+endef
+TARGET_DEVICES += cudy_wr3000e-v1
+
 define Device/cudy_wr3000s-v1
   DEVICE_VENDOR := Cudy
   DEVICE_MODEL := WR3000S
@@ -2211,6 +2228,23 @@ define Device/zbtlink_zbt-z8102ax
   IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
 endef
 TARGET_DEVICES += zbtlink_zbt-z8102ax
+
+define Device/zbtlink_zbt-z8102ax-v2
+  DEVICE_VENDOR := Zbtlink
+  DEVICE_MODEL := ZBT-Z8102AX-V2
+  DEVICE_DTS := mt7981b-zbtlink-zbt-z8102ax-v2
+  DEVICE_DTS_DIR := ../dts
+  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware kmod-usb3 kmod-usb-net-qmi-wwan kmod-usb-serial-option
+  KERNEL_IN_UBI := 1
+  UBINIZE_OPTS := -E 5
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  IMAGE_SIZE := 65536k
+  IMAGES += factory.bin
+  IMAGE/factory.bin := append-ubi | check-size $$(IMAGE_SIZE)
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+endef
+TARGET_DEVICES += zbtlink_zbt-z8102ax-v2
 
 define Device/zbtlink_zbt-z8103ax
   DEVICE_VENDOR := Zbtlink

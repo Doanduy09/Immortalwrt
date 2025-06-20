@@ -72,6 +72,7 @@ case "$board" in
 	cudy,re3000-v1|\
 	cudy,tr3000-v1|\
 	cudy,tr3000-v1-ubootmod|\
+	cudy,wr3000e-v1|\
 	cudy,wr3000s-v1|\
 	cudy,wr3000h-v1|\
 	cudy,wr3000-v1)
@@ -176,6 +177,7 @@ case "$board" in
 	routerich,ax3000|\
 	routerich,ax3000-ubootmod|\
 	zbtlink,zbt-z8102ax|\
+	zbtlink,zbt-z8102ax-v2|\
 	zbtlink,zbt-z8103ax|\
 	zyxel,ex5601-t0-stock|\
 	zyxel,ex5601-t0-ubootmod)
