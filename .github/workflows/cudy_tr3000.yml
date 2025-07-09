@@ -1,0 +1,198 @@
+name: cudy_tr3000
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  release:
+    types: [published]
+  push:
+    branches:
+      - master
+  repository_dispatch:
+  workflow_dispatch:
+    inputs:
+      ssh:
+        description: "Enable SSH connection to Actions"
+        required: false
+        default: "false"
+  watch:
+    types: [started]
+
+permissions:
+  contents: write
+
+env:
+  REPO_URL: https://github.com/immortalwrt/immortalwrt
+  REPO_BRANCH: master
+  FEEDS_CONF: feeds.conf.default
+  CONFIG_FILE: .config-try300
+  DIY_P1_SH: diy-part1.sh
+  DIY_P2_SH: diy-part2.sh
+  UPLOAD_BIN_DIR: false
+  UPLOAD_FIRMWARE: true
+  UPLOAD_COWTRANSFER: false
+  UPLOAD_WETRANSFER: true
+  UPLOAD_RELEASE: true
+  TZ: Asia/Ho_Chi_Minh
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  CUSTOM_99: 99-network-custom.sh
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt-get update -qq
+          sudo apt-get install -y curl
+          sudo apt-get install -y build-essential cmake asciidoc binutils bzip2 gawk gettext git \
+            libncurses5-dev libz-dev patch unzip zlib1g-dev lib32gcc-s1 libc6-dev-i386 subversion flex \
+            uglifyjs git-core gcc-multilib g++-multilib p7zip-full msmtp libssl-dev texinfo libreadline-dev \
+            libglib2.0-dev xmlto qemu-utils upx libelf-dev autoconf automake libtool autopoint ccache \
+            curl wget vim nano python3 python3-pip python3-ply haveged lrzsz device-tree-compiler \
+            scons gperf intltool mkisofs rsync fastjar file g++ libncursesw5-dev \
+            python3-distutils python3-setuptools swig time xsltproc
+          sudo apt-get -qq autoremove --purge
+          sudo apt-get -qq clean
+          sudo timedatectl set-timezone "$TZ"
+          sudo mkdir -p /workdir && sudo chown $USER:$GROUPS /workdir
+
+      - name: Clone source code
+        working-directory: /workdir
+        run: |
+          df -hT $PWD
+          git clone $REPO_URL -b $REPO_BRANCH openwrt
+          ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+
+      - name: Load custom feeds
+        run: |
+          [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
+          chmod +x $DIY_P1_SH && sed -i 's/\r$//' $DIY_P1_SH
+          cd openwrt
+          $GITHUB_WORKSPACE/$DIY_P1_SH
+          git fetch origin --tags
+          latest_tag=$(git describe --tags $(git rev-list --tags --max-count=1))
+          git checkout -f $latest_tag
+          echo $latest_tag > immortalwrt_version
+          echo 'src-git 3Ginfo https://github.com/4IceG/luci-app-3ginfo-lite.git' >>feeds.conf.default
+          echo 'src-git Modem https://github.com/4IceG/luci-app-modemband.git' >>feeds.conf.default
+          echo 'src-git SMS https://github.com/4IceG/luci-app-sms-tool.git' >>feeds.conf.default
+
+          echo >> feeds.conf.default
+          echo 'src-git qmodem https://github.com/FUjr/QModem.git;main' >> feeds.conf.default
+          ./scripts/feeds update qmodem
+          ./scripts/feeds install -a -p qmodem
+          ./scripts/feeds update -a && ./scripts/feeds install -a
+          ./scripts/feeds install -a -f -p qmodem
+
+
+      - name: Update feeds
+        run: cd openwrt && ./scripts/feeds update -a
+
+      - name: Install feeds
+        run: cd openwrt && ./scripts/feeds install -a
+
+      - name: Load custom configuration
+        run: |
+          [ -e files ] && mv files openwrt/files
+          [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
+          chmod +x $DIY_P2_SH && sed -i 's/\r$//' $DIY_P2_SH
+          mkdir -p openwrt/files/etc/uci-defaults
+          mv $CUSTOM_99 openwrt/files/etc/uci-defaults/99-custom
+          cd openwrt
+          $GITHUB_WORKSPACE/$DIY_P2_SH
+
+      - name: Enable SSH connection
+        uses: P3TERX/ssh2actions@v1.0.0
+        if: github.event.inputs.ssh == 'true' || contains(github.event.action, 'ssh')
+
+      - name: Download packages
+        id: package
+        run: |
+          cd openwrt
+          make defconfig
+          make download -j$(nproc)
+          find dl -size -1024c -exec rm -f {} \;
+
+      - name: Compile firmware
+        id: compile
+        run: |
+          cd openwrt
+          echo "Compiling with $(nproc) threads"
+          make -j$(nproc) || make -j1 V=s
+          echo "status=success" >> $GITHUB_OUTPUT
+          grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
+          [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
+          echo "FILE_DATE=_$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
+
+      - name: Handle compilation failure
+        if: steps.compile.outcome == 'failure'
+        run: |
+          cat openwrt/.config || echo "No config file found"
+          echo '================================================================'
+          cd openwrt && make -j1 V=s
+
+      - name: Check disk usage
+        if: always()
+        run: df -hT
+
+      - name: Upload bin directory
+        uses: actions/upload-artifact@v4
+        if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
+        with:
+          name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+          path: openwrt/bin
+
+      - name: Organize firmware files
+        id: organize
+        if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
+        run: |
+          target_dir=$(find openwrt/bin/targets -type d -name "packages" -prune -o -type d -print | grep -v packages | tail -n 1)
+          if [ -d "$target_dir" ]; then
+            cd "$target_dir"
+            rm -rf packages
+            echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "Firmware output directory not found!"
+            exit 1
+          fi
+
+      - name: Upload firmware directory
+        uses: actions/upload-artifact@v4
+        if: steps.organize.outputs.status == 'success' && !cancelled()
+        with:
+          name: DOANDUY-${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+          path: ${{ env.FIRMWARE }}
+
+      - name: Generate release tag
+        id: tag
+        if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+        run: |
+          echo "release_tag=$(date +%Y.%m.%d)" >> $GITHUB_OUTPUT
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Upload firmware to release
+        uses: softprops/action-gh-release@v2
+        if: steps.tag.outputs.status == 'success' && !cancelled()
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          files: ${{ env.FIRMWARE }}/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Remove old releases
+        uses: dev-drprasad/delete-older-releases@v0.3.4
+        if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+        with:
+          keep_latest: 3
+          delete_tags: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
