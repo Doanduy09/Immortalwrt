@@ -11,8 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target-config:
-{% raw %}
+        include:
           - config-file: .config-x86
             config-name: x86
           - config-file: .config-ac1900v1
@@ -21,9 +20,8 @@ jobs:
             config-name: ax7800
           - config-file: .config-gdock
             config-name: gdock
-          # ... thêm các file .config-* khác nếu cần ...
-{% endraw %}
-    name: Build ${{ matrix.target-config.config-name }}
+
+    name: Build ${{ matrix.config-name }}
 
     steps:
       - name: Checkout ImmortalWrt repo
@@ -37,9 +35,9 @@ jobs:
             libncurses-dev libssl-dev python3-distutils unzip zlib1g-dev \
             wget git subversion quilt rsync file
 
-      - name: Copy config for ${{ matrix.target-config.config-name }}
+      - name: Copy config for ${{ matrix.config-name }}
         run: |
-          cp "${{ matrix.target-config.config-file }}" .config
+          cp "${{ matrix.config-file }}" .config
 
       - name: Prepare Build
         run: |
@@ -47,14 +45,14 @@ jobs:
           ./scripts/feeds install -a
           make defconfig
 
-      - name: Compile Target ${{ matrix.target-config.config-name }}
+      - name: Compile Target ${{ matrix.config-name }}
         run: |
           make -j$(nproc)
 
       - name: Upload Firmware Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ matrix.target-config.config-name }}
+          name: firmware-${{ matrix.config-name }}
           path: |
             bin/targets/**/openwrt-*.bin
             bin/targets/**/openwrt-*.img.gz
