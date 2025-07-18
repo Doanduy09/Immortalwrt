@@ -1,0 +1,61 @@
+name: Build All Targets
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 17 * * *'  # chạy lúc 0h Việt Nam (UTC+7)
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target-config:
+{% raw %}
+          - config-file: .config-x86
+            config-name: x86
+          - config-file: .config-ac1900v1
+            config-name: ac1900v1
+          - config-file: .config-ax7800
+            config-name: ax7800
+          - config-file: .config-gdock
+            config-name: gdock
+          # ... thêm các file .config-* khác nếu cần ...
+{% endraw %}
+    name: Build ${{ matrix.target-config.config-name }}
+
+    steps:
+      - name: Checkout ImmortalWrt repo
+        uses: actions/checkout@v3
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            build-essential ccache flex bison gawk gettext \
+            libncurses-dev libssl-dev python3-distutils unzip zlib1g-dev \
+            wget git subversion quilt rsync file
+
+      - name: Copy config for ${{ matrix.target-config.config-name }}
+        run: |
+          cp "${{ matrix.target-config.config-file }}" .config
+
+      - name: Prepare Build
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          make defconfig
+
+      - name: Compile Target ${{ matrix.target-config.config-name }}
+        run: |
+          make -j$(nproc)
+
+      - name: Upload Firmware Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.target-config.config-name }}
+          path: |
+            bin/targets/**/openwrt-*.bin
+            bin/targets/**/openwrt-*.img.gz
+            bin/targets/**/openwrt-*.itb
