@@ -1,26 +1,24 @@
-name: Delete Old Workflows
+name: Auto-Clean
 
 on:
-  workflow_dispatch:
+  #自动清理：每天早上6点
   schedule:
-    - cron: 0 3 * * *
+    - cron: 0 22 * * *
+  #手动清理
+  workflow_dispatch:
+
+permissions: write-all
 
 jobs:
-  Cleaning:
-    runs-on: ubuntu-22.04
-
+  auto_clean:
+    runs-on: ubuntu-latest
     steps:
-    - name: Delete Old Workflows
-      uses: Mattraks/delete-workflow-runs@main
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        retain_days: 2
-        keep_minimum_runs: 0
-
-    - name: Delete Old Releases
-      uses: dev-drprasad/delete-older-releases@master
-      with:
-        keep_latest: 15
-        delete_tags: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Delete old Releases and Workflows
+        uses: ophub/delete-releases-workflows@main
+        with:
+          gh_token: ${{secrets.GITHUB_TOKEN}}
+          delete_releases: true
+          releases_keep_latest: 0
+          delete_tags: true
+          delete_workflows: true
+          workflows_keep_day: 0
