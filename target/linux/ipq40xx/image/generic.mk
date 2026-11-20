@@ -172,6 +172,7 @@ define Device/aruba_ap-303
 	$(call Device/aruba_glenmorangie)
 	DEVICE_MODEL := AP-303
 	DEVICE_DTS_CONFIG := Glenmorangie@1
+	DEVICE_PACKAGES := ipq-wifi-aruba_ap-303
 endef
 TARGET_DEVICES += aruba_ap-303
 
@@ -179,13 +180,14 @@ define Device/aruba_ap-303h
 	$(call Device/aruba_glenmorangie)
 	DEVICE_MODEL := AP-303H
 	DEVICE_DTS_CONFIG := Aberlour@1
+	DEVICE_PACKAGES := ipq-wifi-aruba_ap-303h
 endef
 TARGET_DEVICES += aruba_ap-303h
 
 define Device/aruba_ap-365
 	$(call Device/aruba_glenmorangie)
 	DEVICE_MODEL := AP-365
-	DEVICE_PACKAGES := kmod-hwmon-ad7418
+	DEVICE_PACKAGES := kmod-hwmon-ad7418 ipq-wifi-aruba_ap-365
 	DEVICE_DTS_CONFIG := Bunker@1
 endef
 TARGET_DEVICES += aruba_ap-365
@@ -445,7 +447,7 @@ define Device/edgecore_oap100
 	PAGESIZE := 2048
 	IMAGES := sysupgrade.bin
 	DEVICE_DTS_CONFIG := config@ap.dk07.1-c1
-	DEVICE_PACKAGES := kmod-usb-acm kmod-usb-net kmod-usb-net-cdc-qmi uqmi
+	DEVICE_PACKAGES := kmod-usb-acm kmod-usb-net kmod-usb-net-qmi-wwan uqmi
 endef
 # Missing DSA Setup
 #TARGET_DEVICES += edgecore_oap100
@@ -952,8 +954,11 @@ define Device/netgear_orbi
 	$(call Device/DniImage)
 	SOC := qcom-ipq4019
 	DEVICE_VENDOR := NETGEAR
-	IMAGE/factory.img := append-kernel | pad-offset 128k 64 | \
-		append-uImage-fakehdr filesystem | pad-to $$$$(KERNEL_SIZE) | \
+	KERNEL = kernel-bin | fit none $$(KDIR)/image-$$(DEVICE_DTS).dtb | \
+		pad-offset 128k 64 | append-uImage-fakehdr filesystem | \
+		check-size $$(KERNEL_SIZE)
+	KERNEL_INITRAMFS = kernel-bin | fit none $$(KDIR)/image-$$(DEVICE_DTS).dtb
+	IMAGE/factory.img := append-kernel | pad-to $$$$(KERNEL_SIZE) | \
 		append-rootfs | pad-rootfs | netgear-dni
 	IMAGE/sysupgrade.bin/squashfs := append-rootfs | pad-to 64k | \
 		sysupgrade-tar rootfs=$$$$@ | append-metadata
@@ -1327,7 +1332,7 @@ define Device/ubnt_utr
 	PAGESIZE := 2048
 	KERNEL_IN_UBI :=
 	UBINIZE_PARTS = vol=$$(KDIR_KERNEL_IMAGE)
-	DEVICE_PACKAGES := ipq-wifi-ubnt_utr kmod-i2c-gpio kmod-iio-st_accel-i2c kmod-drm-panel-mipi-dbi kmod-backlight-pwm kmod-gpio-pwm kmod-btusb mipi-dbi-ubnt-utr video-support
+	DEVICE_PACKAGES := ipq-wifi-ubnt_utr kmod-i2c-gpio kmod-iio-st_accel-i2c kmod-backlight-pwm kmod-gpio-pwm kmod-btusb mipi-dbi-ubnt-utr video-support
 endef
 TARGET_DEVICES += ubnt_utr
 

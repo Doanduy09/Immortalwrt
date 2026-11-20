@@ -5,6 +5,27 @@ include $(INCLUDE_DIR)/image.mk
 
 KERNEL_LOADADDR = 0x80100000
 
+define Build/hasivo-stock-patch
+	python3 $(TOPDIR)/target/linux/realtek/image/hasivo-stock-patch.py \
+		--board $(DEVICE_NAME) --image $@ --output $@.new \
+		--topdir $(TOPDIR) --build-dir $(BUILD_DIR) \
+		--busybox-variant $(if $(CONFIG_PACKAGE_busybox-selinux),selinux,default) \
+		--cross-compile "$(TARGET_CROSS)" --staging-dir $(STAGING_DIR) \
+		--cc "$(TARGET_CC)"
+	mv $@.new $@
+endef
+
+define Build/hasivo-web-factory
+	[ ! -f "$@" ] || { \
+		python3 $(TOPDIR)/target/linux/realtek/image/hasivo-web-factory.py \
+			--model $(HASIVO_MODEL) \
+			--uimage-magic $(UIMAGE_MAGIC) \
+			--image $@ \
+			--output $@.new && \
+		mv $@.new $@; \
+	}
+endef
+
 DEVICE_VARS += \
 	BELKIN_HEADER \
 	BELKIN_MODEL \
@@ -18,6 +39,7 @@ DEVICE_VARS += \
         FLASH_ADDR \
         H3C_DEVICE_ID \
         H3C_PRODUCT_ID \
+	HASIVO_MODEL \
 	LINKSYS_HEADER \
 	ZYNFW_BOARD \
 	ZYNFW_ALIGN \
